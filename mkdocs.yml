@@ -1,0 +1,11 @@
+site_name: python-fleet v1
+repo_url: https://github.com/cnelson/python-fleet
+docs_dir: fleet/v1/docs
+
+pages:
+- ['index.md', 'Introduction']
+- ['client.md', 'Client', 'Client']
+- ['unit.md', 'Objects', 'Unit']
+- ['unitstate.md', 'Objects', 'UnitState']
+- ['machine.md', 'Objects', 'Machine']
+- ['apierror.md', 'Errors', 'APIError']
