@@ -1,9 +1,9 @@
-from setuptools import setup
+from setuptools import setup, find_packages
 
 setup(
     name='fleet',
 
-    version='1.0.0.dev1',
+    version='0.1.1',
 
     description='A python client for the fleet v1 API',
 
@@ -34,7 +34,7 @@ setup(
 
     keywords='coreos fleet v1 api client',
 
-    packages=['fleet'],
+    packages=find_packages(),
 
     install_requires=['google-api-python-client==1.3.2'],
 
