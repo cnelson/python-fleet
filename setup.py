@@ -3,7 +3,7 @@ from setuptools import setup, find_packages
 setup(
     name='fleet',
 
-    version='0.1.1',
+    version='0.1.2',
 
     description='A python client for the fleet v1 API',
 
@@ -36,10 +36,7 @@ setup(
 
     packages=find_packages(),
 
-    install_requires=['google-api-python-client==1.3.2'],
-
-    dependency_links=['https://github.com/pferate/google-api-python-client/zipball/'
-                      'python3-module_updates#egg=google-api-python-client-1.3.2'],
+    install_requires=['google-api-python-client>=1.4.0'],
 
     test_suite='fleet.v1.tests'
 
