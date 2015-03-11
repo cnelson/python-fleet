@@ -27,12 +27,7 @@ def has_timeout(timeout):  # pragma: no cover
 
 class UnixConnectionWithTimeout(httplib.HTTPConnection):
     """
-    HTTPConnection subclass that supports timeouts
-
-    All timeouts are in seconds. If None is passed for timeout then
-    Python's default timeout for sockets will be used. See for example
-    the docs of socket.setdefaulttimeout():
-    http://docs.python.org/library/socket.html#socket.setdefaulttimeout
+    HTTP over UNIX Domain Sockets
     """
 
     def __init__(self, host, port=None, strict=None, timeout=None, proxy_info=None):
@@ -40,9 +35,11 @@ class UnixConnectionWithTimeout(httplib.HTTPConnection):
         self.timeout = timeout
 
     def connect(self):
-        """Setup the unix domain socket.
+        """Connect to the unix domain socket, which is passed to us as self.host
 
-        We don't actually connect until ``request`` because httplib2 doesn't given us the path in this method :(
+        This is in host because the format we use for the unix domain socket is:
+
+        http+unix://%2Fpath%2Fto%2Fsocket.sock
 
         """
         try:
