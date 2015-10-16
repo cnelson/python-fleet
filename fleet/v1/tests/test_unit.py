@@ -101,6 +101,21 @@ class TestUnit(unittest.TestCase):
         self.assertRaises(ValueError, test)
         self.assertRaises(ValueError, test2)
 
+    def test_from_string_continuation_good(self):
+        """When parsing unit files, line continuation with a trailing backslash works"""
+        unit = Unit(from_string="[Section]\nThisLine=The start of \\\nsomething very\\\n long and boring\n")
+
+        # test options (this should match the string above)
+        test_options = [
+            {
+                'section': 'Section',
+                'name': 'ThisLine',
+                'value': 'The start of something very long and boring'
+            }
+        ]
+
+        assert unit.options == test_options
+
     def test_options_no_desired_state(self):
         """Setting options explicitly works"""
         test_options = [{'section': 'Service', 'name': 'ExecStart', 'value': '/usr/bin/sleep 1d'}]
