@@ -60,6 +60,7 @@ class Client(object):
             self._service = build(
                 self._API,
                 self._VERSION,
+                cache_discovery=False,
                 discoveryServiceUrl=discovery_url,
                 http=self._http
             )
@@ -123,7 +124,7 @@ class Client(object):
         try:
             return _method.execute(http=self._http)
         except googleapiclient.errors.HttpError as exc:
-            response = json.loads(exc.content)['error']
+            response = json.loads(exc.content.decode('utf-8'))['error']
 
             raise APIError(code=response['code'], message=response['message'], http_error=exc)
 

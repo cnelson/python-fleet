@@ -13,6 +13,13 @@ class TestUnit(unittest.TestCase):
     def setUp(self):
         self._BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 
+    def _load_disccovery_fixture(self):
+        fh = open(os.path.join(self._BASE_DIR, 'fixtures/fleet_v1.json'))
+        discovery = fh.read()
+        fh.close()
+
+        return discovery
+
     def test_init_conflict(self):
         """If you specified data, you cannot specified, options, from_file, or from_string"""
 
@@ -229,12 +236,8 @@ class TestUnit(unittest.TestCase):
     def test_destroy_good(self):
         """We can destroy live units"""
 
-        fh = open(os.path.join(self._BASE_DIR, 'fixtures/fleet_v1.json'))
-        discovery = fh.read()
-        fh.close()
-
         http = HttpMockSequence([
-            ({'status': '200'}, discovery),
+            ({'status': '200'}, self._load_disccovery_fixture()),
             ({'status': '204'}, None)
         ])
 
@@ -247,13 +250,9 @@ class TestUnit(unittest.TestCase):
     def test_destroy_bad(self):
         """APIError is raised when non-existent units are destroyed"""
 
-        fh = open(os.path.join(self._BASE_DIR, 'fixtures/fleet_v1.json'))
-        discovery = fh.read()
-        fh.close()
-
         def test():
             http = HttpMockSequence([
-                ({'status': '200'}, discovery),
+                ({'status': '200'}, self._load_disccovery_fixture()),
                 ({'status': '404'}, '{"error":{"code":404,"message":"unit does not exist"}}')
             ])
 
@@ -285,12 +284,8 @@ class TestUnit(unittest.TestCase):
     def test_desired_state_good_live(self):
         """We can set desired state on live objects"""
 
-        fh = open(os.path.join(self._BASE_DIR, 'fixtures/fleet_v1.json'))
-        discovery = fh.read()
-        fh.close()
-
         http = HttpMockSequence([
-            ({'status': '200'}, discovery),
+            ({'status': '200'}, self._load_disccovery_fixture()),
             ({'status': '204'}, None),
             ({'status': '200'}, '{"currentState":"inactive","desiredState":"inactive","machineID":'
                                 '"2901a44df0834bef935e24a0ddddcc23","name":"test.service","options"'

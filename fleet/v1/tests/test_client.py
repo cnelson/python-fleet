@@ -36,8 +36,8 @@ class TestFleetClient(unittest.TestCase):
         def test():
 
             http = HttpMock(
-                None,
-                {'status': '404'}
+                os.path.join(self._BASE_DIR, 'fixtures/empty_response.txt'),
+                {'status': '404'},
             )
 
             Client(self.endpoint, http=http)
