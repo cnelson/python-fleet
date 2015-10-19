@@ -143,7 +143,12 @@ class TestUnit(unittest.TestCase):
         assert str(test_options) in repr(unit)
 
     def test_str_roundtrip(self):
-        """Calling str() on a unit, should generate a systemd unit"""
+        """Calling str() on a unit, should generate a systemd unit
+
+        Note: this only works for units without line continuations.
+        A unit with line continuations that is roundtripped through this parser
+        will be modified! (line continuations collapsed onto a single line)
+        """
 
         test_string = "[Service]\nExecStart=/usr/bin/sleep 1d"
 

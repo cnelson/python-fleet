@@ -39,11 +39,20 @@ The [fleet API documentation](https://github.com/coreos/fleet/blob/master/Docume
 
 python-fleet will attempt to retrieve and parse this document when it is instantiated.  Should any error occur during this process ``ValueError`` will be raised.
 
+python-fleet supports connecting through SSH tunnels.  See the [full Client documentation](client.md) for additional information on configuring SSH tunnels.
+
     from __future__ import print_function
 
     # connect to fleet over tcp
     try:
         fleet_client = fleet.Client('http://127.0.0.1:49153')
+    except ValueError as exc:
+        print('Unable to discover fleet: {0}'.format(exc))
+        raise SystemExit
+
+    # or via an ssh tunnel
+    try:
+        fleet_client = fleet.Client('http://127.0.0.1:49153', ssh_tunnel='198.51.100.23')
     except ValueError as exc:
         print('Unable to discover fleet: {0}'.format(exc))
         raise SystemExit
