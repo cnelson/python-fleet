@@ -13,6 +13,13 @@ class TestUnit(unittest.TestCase):
     def setUp(self):
         self._BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 
+    def _load_disccovery_fixture(self):
+        fh = open(os.path.join(self._BASE_DIR, 'fixtures/fleet_v1.json'))
+        discovery = fh.read()
+        fh.close()
+
+        return discovery
+
     def test_init_conflict(self):
         """If you specified data, you cannot specified, options, from_file, or from_string"""
 
@@ -94,6 +101,21 @@ class TestUnit(unittest.TestCase):
         self.assertRaises(ValueError, test)
         self.assertRaises(ValueError, test2)
 
+    def test_from_string_continuation_good(self):
+        """When parsing unit files, line continuation with a trailing backslash works"""
+        unit = Unit(from_string="[Section]\nThisLine=The start of \\\nsomething very\\\n long and boring\n")
+
+        # test options (this should match the string above)
+        test_options = [
+            {
+                'section': 'Section',
+                'name': 'ThisLine',
+                'value': 'The start of something very long and boring'
+            }
+        ]
+
+        assert unit.options == test_options
+
     def test_options_no_desired_state(self):
         """Setting options explicitly works"""
         test_options = [{'section': 'Service', 'name': 'ExecStart', 'value': '/usr/bin/sleep 1d'}]
@@ -121,7 +143,12 @@ class TestUnit(unittest.TestCase):
         assert str(test_options) in repr(unit)
 
     def test_str_roundtrip(self):
-        """Calling str() on a unit, should generate a systemd unit"""
+        """Calling str() on a unit, should generate a systemd unit
+
+        Note: this only works for units without line continuations.
+        A unit with line continuations that is roundtripped through this parser
+        will be modified! (line continuations collapsed onto a single line)
+        """
 
         test_string = "[Service]\nExecStart=/usr/bin/sleep 1d"
 
@@ -229,12 +256,8 @@ class TestUnit(unittest.TestCase):
     def test_destroy_good(self):
         """We can destroy live units"""
 
-        fh = open(os.path.join(self._BASE_DIR, 'fixtures/fleet_v1.json'))
-        discovery = fh.read()
-        fh.close()
-
         http = HttpMockSequence([
-            ({'status': '200'}, discovery),
+            ({'status': '200'}, self._load_disccovery_fixture()),
             ({'status': '204'}, None)
         ])
 
@@ -247,13 +270,9 @@ class TestUnit(unittest.TestCase):
     def test_destroy_bad(self):
         """APIError is raised when non-existent units are destroyed"""
 
-        fh = open(os.path.join(self._BASE_DIR, 'fixtures/fleet_v1.json'))
-        discovery = fh.read()
-        fh.close()
-
         def test():
             http = HttpMockSequence([
-                ({'status': '200'}, discovery),
+                ({'status': '200'}, self._load_disccovery_fixture()),
                 ({'status': '404'}, '{"error":{"code":404,"message":"unit does not exist"}}')
             ])
 
@@ -285,12 +304,8 @@ class TestUnit(unittest.TestCase):
     def test_desired_state_good_live(self):
         """We can set desired state on live objects"""
 
-        fh = open(os.path.join(self._BASE_DIR, 'fixtures/fleet_v1.json'))
-        discovery = fh.read()
-        fh.close()
-
         http = HttpMockSequence([
-            ({'status': '200'}, discovery),
+            ({'status': '200'}, self._load_disccovery_fixture()),
             ({'status': '204'}, None),
             ({'status': '200'}, '{"currentState":"inactive","desiredState":"inactive","machineID":'
                                 '"2901a44df0834bef935e24a0ddddcc23","name":"test.service","options"'

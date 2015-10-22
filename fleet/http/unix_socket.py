@@ -57,4 +57,6 @@ class UnixConnectionWithTimeout(httplib.HTTPConnection):
             raise socket.error(msg)
 
 # Add our module to httplib2 via sorta monkey patching
+# When a request is made, the class responsible for the scheme is looked up in this dict
+# So we inject our schemes and capture the Unix domain requests
 sys.modules['httplib2'].SCHEME_TO_CONNECTION['http+unix'] = UnixConnectionWithTimeout

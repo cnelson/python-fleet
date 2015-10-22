@@ -1,12 +1,69 @@
 import unittest
+import mock
 
-import os
+import os, socket, tempfile  # NOQA
 
 from apiclient.http import HttpMock, HttpMockSequence
 
-from ..client import Client
+import paramiko
+
+from ..client import Client, SSHTunnel
 from ..errors import APIError
 from ..objects import Unit
+
+
+class ForwardChecker(object):
+    """A simple mock for SSHTunnel with this class when we don't actually want to connect to servers during tests"""
+    def __init__(self, *args, **kwargs):
+        pass
+
+    def forward_tcp(self, host, port):
+        return [host, port]
+
+    def forward_unix(self, path):
+        return path
+
+
+class TestSSHTunnel(unittest.TestCase):
+    def test_good_raw_transport(self):
+        """Passing a raw transport to ssh tunnel skips other configuration"""
+        t = paramiko.transport.Transport(None)
+
+        s = SSHTunnel(host=t)
+
+        assert s.client is None
+        assert id(s.transport) == id(t)
+
+    def test_bad_known_host_file(self):
+        """If known_hosts_file doesn't exist but strict_host_key_checking is True, then a ValueError is raised"""
+        tmpdir = tempfile.mkdtemp()
+
+        bad_host_file = os.path.join(tmpdir, 'known_hosts')
+
+        def test():
+            SSHTunnel(host='foo', known_hosts_file=bad_host_file, strict_host_key_checking=True)
+
+        os.rmdir(tmpdir)
+
+        self.assertRaises(ValueError, test)
+
+    def test_unix_forward(self):
+        """Forwarding a unix domain socket raises RuntimeError"""
+        t = paramiko.transport.Transport(None)
+
+        s = SSHTunnel(host=t)
+
+        def test():
+            s.forward_unix('/tmp/socket')
+
+        self.assertRaises(RuntimeError, test)
+
+    def test_good_connect(self):
+        """When we connect with a good client, the transport gets set correctly"""
+
+        with mock.patch('paramiko.SSHClient'):
+            s = SSHTunnel(host='foo', strict_host_key_checking=False)
+            assert id(s.client.get_transport()) == id(s.transport)
 
 
 class TestFleetClient(unittest.TestCase):
@@ -14,13 +71,16 @@ class TestFleetClient(unittest.TestCase):
 
         self._BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 
-        self.discovery = HttpMock(
-            os.path.join(self._BASE_DIR, 'fixtures/fleet_v1.json'),
-            {'status': '200'}
-        )
+        self.discovery = self._get_discovery()
 
         self.endpoint = 'http://198.51.100.23:9160'
         self.client = Client(self.endpoint, http=self.discovery)
+
+    def _get_discovery(self, *args, **kwargs):
+        return HttpMock(
+            os.path.join(self._BASE_DIR, 'fixtures/fleet_v1.json'),
+            {'status': '200'}
+        )
 
     def mock(self, http):
         self.client._http = http
@@ -36,13 +96,154 @@ class TestFleetClient(unittest.TestCase):
         def test():
 
             http = HttpMock(
-                None,
-                {'status': '404'}
+                os.path.join(self._BASE_DIR, 'fixtures/empty_response.txt'),
+                {'status': '404'},
             )
 
             Client(self.endpoint, http=http)
 
         self.assertRaises(ValueError, test)
+
+    def test_init_ssh_tunnel_conflicting_params(self):
+        """Providing conflicting parameters raises ValueError"""
+
+        def test_tunnel_with_http():
+            Client(self.endpoint, http=True, ssh_tunnel=True)
+
+        def test_raw_with_http():
+            Client(self.endpoint, http=True, ssh_raw_transport=True)
+
+        def test_both_with_http():
+            Client(self.endpoint, http=True, ssh_tunnel=True, ssh_raw_transport=True)
+
+        def test_both():
+            Client(self.endpoint, http=True, ssh_tunnel=True, ssh_raw_transport=True)
+
+        for test in [test_tunnel_with_http, test_raw_with_http, test_both_with_http, test_both]:
+            self.assertRaises(ValueError, test)
+
+    def test_bad_transport_value(self):
+        """Providing anything but a paramiko.transport.Transport to ssh_raw_transport raises ValueError"""
+
+        def test():
+            Client(endpoint=self.endpoint, ssh_raw_transport=True)
+
+        self.assertRaises(ValueError, test)
+
+    def test_hostport_split_default_port(self):
+        """Validate that when passing a default port it's used when no port is provided"""
+        result = self.client._split_hostport('foo', default_port=916)
+
+        assert result == ('foo', 916)
+
+        result = self.client._split_hostport('foo:22', default_port=916)
+
+        assert result == ('foo', 22)
+
+    def test_hostport_split_no_port(self):
+        """ValueError is raised if no port is passted to hostport_split"""
+
+        def test():
+            self.client._split_hostport('foo')
+
+        self.assertRaises(ValueError, test)
+
+    def test_hostport_split_not_int(self):
+        """ValueError is raised if a non number port is passed"""
+
+        def test():
+            self.client._split_hostport('foo:bar')
+
+        self.assertRaises(ValueError, test)
+
+    def test_hostport_split_not_in_range(self):
+        """ValueError is raised if port is out of range"""
+
+        def test():
+            self.client._split_hostport('foo:99999')
+
+        self.assertRaises(ValueError, test)
+
+    def test_endpoint_to_target_unix(self):
+        """When passing in a http+unix endpoint, we receive the path pack with no host/port"""
+        result = self.client._endpoint_to_target('http+unix://%2Ftmp%2Fsocket')
+
+        assert result == (None, None, '/tmp/socket')
+
+    def test_endpoint_to_target_https_default_port(self):
+        """When passing in a https endpoint with no port, port 443 is returned"""
+        result = self.client._endpoint_to_target('https://foo')
+
+        assert result == ('foo', 443, None)
+
+    def test_endpoint_to_target_http_default_port(self):
+        """When passing in a https endpoint with no port, port 443 is returned"""
+        result = self.client._endpoint_to_target('http://foo')
+
+        assert result == ('foo', 80, None)
+
+    def test_endpoint_to_target_explicit_port(self):
+        """An explicit port is used if provided regardless of scheme"""
+        result = self.client._endpoint_to_target('http://foo:999')
+
+        assert result == ('foo', 999, None)
+
+        result = self.client._endpoint_to_target('https://foo:888')
+
+        assert result == ('foo', 888, None)
+
+    def test_get_proxy_info_tcp(self):
+        """When given a TCP based endpoint, an open channel is returned"""
+
+        self.client._ssh_tunnel = ForwardChecker()
+        result = self.client._get_proxy_info()
+
+        assert result.sock == ['198.51.100.23', 9160]
+
+    def test_get_proxy_info_unix(self):
+        """When given a TCP based endpoint, an open channel is returned"""
+
+        self.client._endpoint = 'http+unix://%2Ftmp%2Fsocket'
+        self.client._ssh_tunnel = ForwardChecker()
+        result = self.client._get_proxy_info()
+
+        assert result.sock == '/tmp/socket'
+
+    def test_ssh_tunnel_bad_host(self):
+        """When SSHClient returns a socket.gaierror for a bad hostname, we return ValueError"""
+        def test():
+            with mock.patch('paramiko.SSHClient', side_effect=socket.gaierror):
+                Client(endpoint=self.endpoint, ssh_tunnel='unknown_host')
+
+        self.assertRaises(ValueError, test)
+
+    def test_ssh_tunnel_bad_port(self):
+        """When SSHClient returns a socket.error for a bad port, we return ValueError"""
+        def test():
+            with mock.patch('paramiko.SSHClient', side_effect=socket.error):
+                Client(endpoint=self.endpoint, ssh_tunnel='unknown_host:2222')
+
+        self.assertRaises(ValueError, test)
+
+    def test_ssh_tunnel_ssh_error(self):
+        """When SSHClient returns an error authenticating, we return ValueError"""
+        def test():
+            with mock.patch('paramiko.SSHClient', side_effect=paramiko.ssh_exception.SSHException):
+                Client(endpoint=self.endpoint, ssh_tunnel='host-ok-bad-key')
+
+        self.assertRaises(ValueError, test)
+
+    def test_ssh_tunnel_with_unix(self):
+        """RuntimeError is raised if we try to forward a unix domain socket"""
+
+        t = paramiko.transport.Transport(None)
+
+        s = SSHTunnel(host=t)
+
+        def test():
+            s.forward_unix('/tmp/socket')
+
+        self.assertRaises(RuntimeError, test)
 
     def test_single_request_good(self):
         """A single request returns 200"""

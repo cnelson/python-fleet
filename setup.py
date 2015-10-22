@@ -3,7 +3,7 @@ from setuptools import setup, find_packages
 setup(
     name='fleet',
 
-    version='0.1.2',
+    version='0.1.3',
 
     description='A python client for the fleet v1 API',
 
@@ -36,7 +36,12 @@ setup(
 
     packages=find_packages(),
 
-    install_requires=['google-api-python-client>=1.4.0'],
+    install_requires=[
+        'google-api-python-client>=1.4.2',
+        'paramiko>=1.15.1',
+        'mock',
+        'argparse'
+    ],
 
     test_suite='fleet.v1.tests'
 
